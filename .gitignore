@@ -1,0 +1,49 @@
+# Build output and generated client code
+/target/
+/build/
+/generated/
+
+# Local runtime state, fault-injection output, and backups
+/data/
+/.phase*-backup*/
+*.events.jsonl
+*.snapshot.json
+*.snapshot.json.tmp
+*.events.jsonl.tmp
+*.tmp
+*.log
+*.log.*
+hs_err_pid*
+replay_pid*
+
+# Developer machines and local credentials
+/.idea/
+/.vscode/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated/
+.springBeans
+.sts4-cache/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+settings.xml
+
+# Legacy local Maven Wrapper targets another Maven version and is not part of this release.
+/mvnw
+/mvnw.cmd
+/.mvn/wrapper/
+
+# OS noise
+.DS_Store
+Thumbs.db

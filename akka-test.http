@@ -1,0 +1,41 @@
+### 在新的空持久化目录中启动服务后运行；HTTP 默认 8080。
+### 同键同参数再次提交会返回原订单，不产生第二笔成交。
+POST http://localhost:8080/orders/place
+Content-Type: application/json
+
+{
+  "userId": "demo-buyer",
+  "clientOrderId": "buy-001",
+  "symbol": "BTCUSDT",
+  "side": "BUY",
+  "price": 10000,
+  "quantity": 5
+}
+
+###
+POST http://localhost:8080/orders/place
+Content-Type: application/json
+
+{
+  "userId": "demo-seller",
+  "clientOrderId": "sell-001",
+  "symbol": "BTCUSDT",
+  "side": "SELL",
+  "price": 10000,
+  "quantity": 3
+}
+
+###
+GET http://localhost:8080/orders/book?symbol=BTCUSDT
+
+### 带斜杠的交易对使用查询参数，不将 %2F 放入路径。
+GET http://localhost:8080/orders/book?symbol=BTC%2FUSDT
+
+### 将下单响应的 data.finalOrder.orderId 填入下方 orderId，撤销剩余数量。
+POST http://localhost:8080/orders/cancel
+Content-Type: application/json
+
+{
+  "symbol": "BTCUSDT",
+  "orderId": "<replace-with-buy-order-id>"
+}

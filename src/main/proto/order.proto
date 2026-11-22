@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package order;
+
+option java_multiple_files = true;
+option java_package = "com.example.order.grpc";
+option java_outer_classname = "OrderProto";
+
+service OrderService {
+  rpc PlaceOrder (PlaceOrderRequest) returns (PlaceOrderResponse);
+  rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse);
+  rpc GetBook (GetBookRequest) returns (GetBookResponse);
+}
+
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  SIDE_BUY = 1;
+  SIDE_SELL = 2;
+}
+
+message PlaceOrderRequest {
+  int64 user_id = 1;
+  // Required by the application for safe retries; proto3 itself does not enforce presence.
+  string client_order_id = 2;
+  string symbol = 3;
+  Side side = 4;
+  int64 price = 5;
+  int64 quantity = 6;
+  string username = 7;
+}
+
+message PlaceOrderResponse {
+  bool success = 1;
+  string message = 2;
+  string order_id = 3;
+}
+
+message CancelOrderRequest {
+  string symbol = 1;
+  string order_id = 2;
+}
+
+message CancelOrderResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetBookRequest {
+  string symbol = 1;
+}
+
+message GetBookResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string lines = 3;
+}
