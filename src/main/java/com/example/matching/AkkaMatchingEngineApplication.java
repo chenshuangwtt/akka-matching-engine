@@ -9,5 +9,4 @@ public class AkkaMatchingEngineApplication {
     public static void main(String[] args) {
         SpringApplication.run(AkkaMatchingEngineApplication.class, args);
     }
-
 }

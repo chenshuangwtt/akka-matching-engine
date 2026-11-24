@@ -1,8 +1,8 @@
 package com.example.matching.engine;
 
 import com.example.matching.domain.Order;
-import com.example.matching.domain.OrderStatus;
 import com.example.matching.domain.OrderRules;
+import com.example.matching.domain.OrderStatus;
 import com.example.matching.domain.Side;
 import com.example.matching.domain.Trade;
 import com.example.matching.util.IdGenerator;
@@ -21,18 +21,20 @@ public class OrderBook {
     public static final int DEFAULT_MAX_HISTORICAL_ORDERS = 100_000;
     private final int maxHistoricalOrders;
 
-    public OrderBook() { this(DEFAULT_MAX_HISTORICAL_ORDERS); }
+    public OrderBook() {
+        this(DEFAULT_MAX_HISTORICAL_ORDERS);
+    }
 
     public OrderBook(int maxHistoricalOrders) {
-        if (maxHistoricalOrders <= 0) throw new IllegalArgumentException("maxHistoricalOrders must be positive");
+        if (maxHistoricalOrders <= 0) {
+            throw new IllegalArgumentException("maxHistoricalOrders must be positive");
+        }
         this.maxHistoricalOrders = maxHistoricalOrders;
     }
 
-    private final NavigableMap<Long, PriceLevel> buyBook =
-            new TreeMap<>(Comparator.reverseOrder());
+    private final NavigableMap<Long, PriceLevel> buyBook = new TreeMap<>(Comparator.reverseOrder());
 
-    private final NavigableMap<Long, PriceLevel> sellBook =
-            new TreeMap<>();
+    private final NavigableMap<Long, PriceLevel> sellBook = new TreeMap<>();
 
     private final Map<String, OrderRef> orderIndex = new HashMap<>();
     private final Map<String, Order> allOrders = new HashMap<>();
@@ -53,33 +55,46 @@ public class OrderBook {
         return allOrders.containsKey(orderId);
     }
 
-    public int historicalOrderCount() { return allOrders.size(); }
+    public int historicalOrderCount() {
+        return allOrders.size();
+    }
 
-    public boolean isAtCapacity() { return allOrders.size() >= maxHistoricalOrders; }
+    public boolean isAtCapacity() {
+        return allOrders.size() >= maxHistoricalOrders;
+    }
 
-    public int maxHistoricalOrders() { return maxHistoricalOrders; }
+    public int maxHistoricalOrders() {
+        return maxHistoricalOrders;
+    }
 
     private void register(Order order) {
         if (allOrders.putIfAbsent(order.getOrderId(), order) != null) {
             throw new IllegalArgumentException("Duplicate server orderId: " + order.getOrderId());
         }
-        String previous = clientOrderIndex.putIfAbsent(
-                new ClientKey(order.getUserId(), order.getClientOrderId()), order.getOrderId());
+        String previous =
+                clientOrderIndex.putIfAbsent(
+                        new ClientKey(order.getUserId(), order.getClientOrderId()),
+                        order.getOrderId());
         if (previous != null) {
             allOrders.remove(order.getOrderId());
-            throw new IllegalArgumentException("Duplicate clientOrderId: " + order.getClientOrderId());
+            throw new IllegalArgumentException(
+                    "Duplicate clientOrderId: " + order.getClientOrderId());
         }
     }
 
-    public MatchResult place(Order incoming) { return place(incoming, 0); }
+    public MatchResult place(Order incoming) {
+        return place(incoming, 0);
+    }
 
     public MatchResult place(Order incoming, long eventSequence) {
         validateNewOrder(incoming);
-        if (hasSeenOrderId(incoming.getOrderId()) ||
-                findByClientOrderId(incoming.getUserId(), incoming.getClientOrderId()) != null) {
+        if (hasSeenOrderId(incoming.getOrderId())
+                || findByClientOrderId(incoming.getUserId(), incoming.getClientOrderId()) != null) {
             throw new IllegalArgumentException("Duplicate order identity");
         }
-        if (isAtCapacity()) throw new IllegalStateException("historical order capacity exceeded");
+        if (isAtCapacity()) {
+            throw new IllegalStateException("historical order capacity exceeded");
+        }
         MatchResult result = new MatchResult();
 
         if (incoming.getSide() == Side.BUY) {
@@ -101,8 +116,12 @@ public class OrderBook {
 
     public void placeForBenchmark(Order incoming) {
         validateNewOrder(incoming);
-        if (hasSeenOrderId(incoming.getOrderId())) throw new IllegalArgumentException("Duplicate server orderId");
-        if (isAtCapacity()) throw new IllegalStateException("historical order capacity exceeded");
+        if (hasSeenOrderId(incoming.getOrderId())) {
+            throw new IllegalArgumentException("Duplicate server orderId");
+        }
+        if (isAtCapacity()) {
+            throw new IllegalStateException("historical order capacity exceeded");
+        }
         if (incoming.getSide() == Side.BUY) {
             matchBuyNoResult(incoming);
         } else {
@@ -157,19 +176,26 @@ public class OrderBook {
         }
         clear();
         for (Order order : historicalOrders) {
-            if (order == null || order.getStatus() == null || order.getQuantity() <= 0
-                    || order.getRemainingQuantity() < 0 || order.getRemainingQuantity() > order.getQuantity()
-                    || (order.getStatus() == OrderStatus.NEW && order.getRemainingQuantity() != order.getQuantity())
+            if (order == null
+                    || order.getStatus() == null
+                    || order.getQuantity() <= 0
+                    || order.getRemainingQuantity() < 0
+                    || order.getRemainingQuantity() > order.getQuantity()
+                    || (order.getStatus() == OrderStatus.NEW
+                            && order.getRemainingQuantity() != order.getQuantity())
                     || (order.getStatus() == OrderStatus.PARTIALLY_FILLED
-                    && (order.getRemainingQuantity() == 0 || order.getRemainingQuantity() == order.getQuantity()))
-                    || (order.getStatus() == OrderStatus.FILLED && order.getRemainingQuantity() != 0)) {
+                            && (order.getRemainingQuantity() == 0
+                                    || order.getRemainingQuantity() == order.getQuantity()))
+                    || (order.getStatus() == OrderStatus.FILLED
+                            && order.getRemainingQuantity() != 0)) {
                 throw new IllegalStateException("Invalid historical order state in snapshot");
             }
             register(order.copy());
         }
         for (Order open : openOrders) {
             Order order = allOrders.get(open.getOrderId());
-            if (order == null || order.getRemainingQuantity() != open.getRemainingQuantity()
+            if (order == null
+                    || order.getRemainingQuantity() != open.getRemainingQuantity()
                     || order.getStatus() != open.getStatus()
                     || !Objects.equals(order.getUserId(), open.getUserId())
                     || !Objects.equals(order.getSymbol(), open.getSymbol())
@@ -177,23 +203,26 @@ public class OrderBook {
                     || order.getPrice() != open.getPrice()
                     || order.getQuantity() != open.getQuantity()
                     || !Objects.equals(order.getClientOrderId(), open.getClientOrderId())) {
-                throw new IllegalStateException("Open order differs from historical index: " + open.getOrderId());
+                throw new IllegalStateException(
+                        "Open order differs from historical index: " + open.getOrderId());
             }
             if (order.getRemainingQuantity() <= 0
                     || (order.getStatus() != OrderStatus.NEW
-                    && order.getStatus() != OrderStatus.PARTIALLY_FILLED)
+                            && order.getStatus() != OrderStatus.PARTIALLY_FILLED)
                     || orderIndex.containsKey(order.getOrderId())) {
-                throw new IllegalStateException("Invalid or duplicate open order in snapshot: " + open.getOrderId());
+                throw new IllegalStateException(
+                        "Invalid or duplicate open order in snapshot: " + open.getOrderId());
             }
             addToBook(order);
         }
         for (Order historical : allOrders.values()) {
-            boolean shouldBeOpen = historical.getRemainingQuantity() > 0
-                    && (historical.getStatus() == OrderStatus.NEW
-                    || historical.getStatus() == OrderStatus.PARTIALLY_FILLED);
+            boolean shouldBeOpen =
+                    historical.getRemainingQuantity() > 0
+                            && (historical.getStatus() == OrderStatus.NEW
+                                    || historical.getStatus() == OrderStatus.PARTIALLY_FILLED);
             if (shouldBeOpen != orderIndex.containsKey(historical.getOrderId())) {
-                throw new IllegalStateException("Historical/open order mismatch in snapshot: "
-                        + historical.getOrderId());
+                throw new IllegalStateException(
+                        "Historical/open order mismatch in snapshot: " + historical.getOrderId());
             }
         }
     }
@@ -295,31 +324,35 @@ public class OrderBook {
         }
     }
 
-    private void execute(Order buyOrder,
-                         Order sellOrder,
-                         long tradePrice,
-                         List<Trade> trades,
-                         long eventSequence) {
-        long executedQty = Math.min(buyOrder.getRemainingQuantity(), sellOrder.getRemainingQuantity());
+    private void execute(
+            Order buyOrder,
+            Order sellOrder,
+            long tradePrice,
+            List<Trade> trades,
+            long eventSequence) {
+        long executedQty =
+                Math.min(buyOrder.getRemainingQuantity(), sellOrder.getRemainingQuantity());
 
         buyOrder.reduceRemaining(executedQty);
         sellOrder.reduceRemaining(executedQty);
 
-        trades.add(new Trade(
-                eventSequence > 0
-                        ? IdGenerator.tradeId(buyOrder.getSymbol(), eventSequence, trades.size() + 1)
-                        : IdGenerator.transientTradeId(),
-                buyOrder.getSymbol(),
-                buyOrder.getOrderId(),
-                sellOrder.getOrderId(),
-                tradePrice,
-                executedQty,
-                System.currentTimeMillis()
-        ));
+        trades.add(
+                new Trade(
+                        eventSequence > 0
+                                ? IdGenerator.tradeId(
+                                        buyOrder.getSymbol(), eventSequence, trades.size() + 1)
+                                : IdGenerator.transientTradeId(),
+                        buyOrder.getSymbol(),
+                        buyOrder.getOrderId(),
+                        sellOrder.getOrderId(),
+                        tradePrice,
+                        executedQty,
+                        System.currentTimeMillis()));
     }
 
     private void executeNoResult(Order buyOrder, Order sellOrder) {
-        long executedQty = Math.min(buyOrder.getRemainingQuantity(), sellOrder.getRemainingQuantity());
+        long executedQty =
+                Math.min(buyOrder.getRemainingQuantity(), sellOrder.getRemainingQuantity());
 
         buyOrder.reduceRemaining(executedQty);
         sellOrder.reduceRemaining(executedQty);
@@ -332,10 +365,8 @@ public class OrderBook {
         orderIndex.put(order.getOrderId(), new OrderRef(order.getSide(), order.getPrice(), node));
     }
 
-    private void removeFilled(long price,
-                              PriceLevel level,
-                              OrderNode node,
-                              NavigableMap<Long, PriceLevel> book) {
+    private void removeFilled(
+            long price, PriceLevel level, OrderNode node, NavigableMap<Long, PriceLevel> book) {
         level.remove(node);
         orderIndex.remove(node.order.getOrderId());
         if (level.isEmpty()) {
@@ -343,16 +374,20 @@ public class OrderBook {
         }
     }
 
-    private void appendSnapshotLines(NavigableMap<Long, PriceLevel> book,
-                                     String side,
-                                     List<String> lines) {
+    private void appendSnapshotLines(
+            NavigableMap<Long, PriceLevel> book, String side, List<String> lines) {
         for (Map.Entry<Long, PriceLevel> entry : book.entrySet()) {
             OrderNode current = entry.getValue().head;
             while (current != null) {
                 Order order = current.order;
-                lines.add(side + " price=" + order.getPrice()
-                        + ", remain=" + order.getRemainingQuantity()
-                        + ", id=" + order.getOrderId());
+                lines.add(
+                        side
+                                + " price="
+                                + order.getPrice()
+                                + ", remain="
+                                + order.getRemainingQuantity()
+                                + ", id="
+                                + order.getOrderId());
                 current = current.next;
             }
         }

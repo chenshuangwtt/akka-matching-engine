@@ -4,8 +4,7 @@ import java.util.Locale;
 
 public final class SymbolKeyUtil {
 
-    private SymbolKeyUtil() {
-    }
+    private SymbolKeyUtil() {}
 
     public static String toSafeKey(String symbol) {
         String normalized = symbol == null ? "" : symbol.trim().toLowerCase(Locale.ROOT);

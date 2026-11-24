@@ -7,8 +7,7 @@ public final class MdcUtil {
     private static final String REQUEST_ID = "requestId";
     private static final String CLIENT_ORDER_ID = "clientOrderId";
 
-    private MdcUtil() {
-    }
+    private MdcUtil() {}
 
     public static Scope withRequest(String requestId) {
         return with(requestId, null);

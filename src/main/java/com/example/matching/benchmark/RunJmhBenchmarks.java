@@ -1,8 +1,8 @@
 package com.example.matching.benchmark;
 
+import org.openjdk.jmh.results.RunResult;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
-import org.openjdk.jmh.results.RunResult;
 import org.openjdk.jmh.runner.options.CommandLineOptionException;
 import org.openjdk.jmh.runner.options.CommandLineOptions;
 import org.openjdk.jmh.runner.options.Options;
@@ -14,12 +14,13 @@ import java.util.Locale;
 public class RunJmhBenchmarks {
 
     public static void main(String[] args) throws RunnerException, CommandLineOptionException {
-        Options options = args.length == 0
-                ? new OptionsBuilder()
-                .include(MatchingEngineJmhBenchmark.class.getSimpleName())
-                .forks(1)
-                .build()
-                : new CommandLineOptions(args);
+        Options options =
+                args.length == 0
+                        ? new OptionsBuilder()
+                                .include(MatchingEngineJmhBenchmark.class.getSimpleName())
+                                .forks(1)
+                                .build()
+                        : new CommandLineOptions(args);
 
         Collection<RunResult> results = new Runner(options).run();
         // 在 JMH 原始结果之外，再补一份按订单数换算后的吞吐视图。
@@ -45,14 +46,14 @@ public class RunJmhBenchmarks {
             if (ordersParam == null) {
                 System.out.printf(
                         Locale.US,
-                        "%s | persistence=%s | symbols=%s | cross=%s | priceLevels=%s | ops/s=%.2f%n",
+                        "%s | persistence=%s | symbols=%s | cross=%s | priceLevels=%s |"
+                                + " ops/s=%.2f%n",
                         benchmark,
                         persistenceParam,
                         symbolsParam,
                         crossParam,
                         priceLevelsParam,
-                        opsPerSecond
-                );
+                        opsPerSecond);
                 continue;
             }
 
@@ -61,7 +62,8 @@ public class RunJmhBenchmarks {
 
             System.out.printf(
                     Locale.US,
-                    "%s | orders=%d | persistence=%s | symbols=%s | cross=%s | priceLevels=%s | ops/s=%.2f | derived orders/s=%.2f%n",
+                    "%s | orders=%d | persistence=%s | symbols=%s | cross=%s | priceLevels=%s |"
+                            + " ops/s=%.2f | derived orders/s=%.2f%n",
                     benchmark,
                     ordersPerInvocation,
                     persistenceParam,
@@ -69,8 +71,7 @@ public class RunJmhBenchmarks {
                     crossParam,
                     priceLevelsParam,
                     opsPerSecond,
-                    ordersPerSecond
-            );
+                    ordersPerSecond);
         }
         System.out.println("==============================================");
         System.out.println();

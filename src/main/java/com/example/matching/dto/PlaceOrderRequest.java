@@ -1,8 +1,8 @@
 package com.example.matching.dto;
 
 import com.example.matching.domain.Side;
-import lombok.Data;
 
+import lombok.Data;
 
 @Data
 public class PlaceOrderRequest {

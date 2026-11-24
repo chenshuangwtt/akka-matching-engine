@@ -5,11 +5,13 @@ import akka.actor.typed.ActorSystem;
 import akka.actor.typed.Props;
 import akka.actor.typed.javadsl.AskPattern;
 import akka.actor.typed.javadsl.Behaviors;
+
 import com.example.matching.actor.SymbolActor;
 import com.example.matching.domain.Order;
 import com.example.matching.domain.Side;
 import com.example.matching.engine.MatchResult;
 import com.example.matching.engine.OrderBook;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -80,7 +82,8 @@ public class MatchingEngineJmhBenchmark {
 
     // 同样的 Actor 路径，但会额外走持久化写入，并委托给 persistence-dispatcher。
     @Benchmark
-    public void singleSymbolActorWithPersistence(PersistentActorBatchState state, Blackhole blackhole) throws Exception {
+    public void singleSymbolActorWithPersistence(
+            PersistentActorBatchState state, Blackhole blackhole) throws Exception {
         for (OrderSeed seed : state.seeds) {
             state.singleActor.tell(new SymbolActor.PlaceOrder(seed.toOrder(), state.replyProbe));
         }
@@ -92,7 +95,9 @@ public class MatchingEngineJmhBenchmark {
     @Benchmark
     public void multiSymbolActor(MultiActorBatchState state, Blackhole blackhole) throws Exception {
         for (OrderSeed seed : state.seeds) {
-            state.actorMap.get(seed.symbol()).tell(new SymbolActor.PlaceOrderNoReply(seed.toOrder()));
+            state.actorMap
+                    .get(seed.symbol())
+                    .tell(new SymbolActor.PlaceOrderNoReply(seed.toOrder()));
         }
 
         blackhole.consume(waitUntilProcessed(state.system, state.actorMap, state.seeds.size()));
@@ -135,13 +140,15 @@ public class MatchingEngineJmhBenchmark {
         @Setup(Level.Invocation)
         public void setup() {
             seeds = OrderSeed.generate(orders, 1, priceLevels, cross);
-            system = ActorSystem.create(Behaviors.empty(), "jmh-single-symbol-" + System.nanoTime());
-            singleActor = system.systemActorOf(
-                    SymbolActor.create("SYM0", false, null),
-                    "symbol-sym0",
-                    // benchmark 场景使用更激进的 dispatcher 配置。
-                    Props.empty().withDispatcherFromConfig("akka.actor.benchmark-dispatcher")
-            );
+            system =
+                    ActorSystem.create(Behaviors.empty(), "jmh-single-symbol-" + System.nanoTime());
+            singleActor =
+                    system.systemActorOf(
+                            SymbolActor.create("SYM0", false, null),
+                            "symbol-sym0",
+                            // benchmark 场景使用更激进的 dispatcher 配置。
+                            Props.empty()
+                                    .withDispatcherFromConfig("akka.actor.benchmark-dispatcher"));
         }
 
         @TearDown(Level.Invocation)
@@ -181,9 +188,9 @@ public class MatchingEngineJmhBenchmark {
                         system.systemActorOf(
                                 SymbolActor.create(symbol, false, null),
                                 "symbol-" + symbol.toLowerCase(),
-                                Props.empty().withDispatcherFromConfig("akka.actor.benchmark-dispatcher")
-                        )
-                );
+                                Props.empty()
+                                        .withDispatcherFromConfig(
+                                                "akka.actor.benchmark-dispatcher")));
             }
         }
 
@@ -216,14 +223,18 @@ public class MatchingEngineJmhBenchmark {
             Path benchmarkRoot = Path.of("target", "p3-jmh-data").toAbsolutePath().normalize();
             Files.createDirectories(benchmarkRoot);
             persistenceDir = Files.createTempDirectory(benchmarkRoot, "run-");
-            system = ActorSystem.create(Behaviors.empty(), "jmh-single-symbol-persistence-" + System.nanoTime());
+            system =
+                    ActorSystem.create(
+                            Behaviors.empty(),
+                            "jmh-single-symbol-persistence-" + System.nanoTime());
             replyProbe = system.ignoreRef();
-            singleActor = system.systemActorOf(
-                    SymbolActor.create("SYM0", true, persistenceDir),
-                    "symbol-sym0",
-                    // 撮合仍跑在 matching-dispatcher，上层持久化写入在 SymbolActor 内部再做委托。
-                    Props.empty().withDispatcherFromConfig("akka.actor.matching-dispatcher")
-            );
+            singleActor =
+                    system.systemActorOf(
+                            SymbolActor.create("SYM0", true, persistenceDir),
+                            "symbol-sym0",
+                            // 撮合仍跑在 matching-dispatcher，上层持久化写入在 SymbolActor 内部再做委托。
+                            Props.empty()
+                                    .withDispatcherFromConfig("akka.actor.matching-dispatcher"));
         }
 
         @TearDown(Level.Invocation)
@@ -234,18 +245,20 @@ public class MatchingEngineJmhBenchmark {
         }
     }
 
-    private static long waitUntilProcessed(ActorSystem<Void> system,
-                                           ActorRef<SymbolActor.Command> actor,
-                                           long expected) throws Exception {
+    private static long waitUntilProcessed(
+            ActorSystem<Void> system, ActorRef<SymbolActor.Command> actor, long expected)
+            throws Exception {
         Duration timeout = Duration.ofSeconds(30);
 
         while (true) {
-            long processed = AskPattern.ask(
-                    actor,
-                    SymbolActor.GetProcessedCount::new,
-                    timeout,
-                    system.scheduler()
-            ).toCompletableFuture().get();
+            long processed =
+                    AskPattern.ask(
+                                    actor,
+                                    SymbolActor.GetProcessedCount::new,
+                                    timeout,
+                                    system.scheduler())
+                            .toCompletableFuture()
+                            .get();
 
             if (processed >= expected) {
                 return processed;
@@ -255,21 +268,25 @@ public class MatchingEngineJmhBenchmark {
         }
     }
 
-    private static long waitUntilProcessed(ActorSystem<Void> system,
-                                           Map<String, ActorRef<SymbolActor.Command>> actorMap,
-                                           long expected) throws Exception {
+    private static long waitUntilProcessed(
+            ActorSystem<Void> system,
+            Map<String, ActorRef<SymbolActor.Command>> actorMap,
+            long expected)
+            throws Exception {
         Duration timeout = Duration.ofSeconds(3);
 
         while (true) {
             long totalProcessed = 0L;
 
             for (ActorRef<SymbolActor.Command> actor : actorMap.values()) {
-                totalProcessed += AskPattern.ask(
-                        actor,
-                        SymbolActor.GetProcessedCount::new,
-                        timeout,
-                        system.scheduler()
-                ).toCompletableFuture().get();
+                totalProcessed +=
+                        AskPattern.ask(
+                                        actor,
+                                        SymbolActor.GetProcessedCount::new,
+                                        timeout,
+                                        system.scheduler())
+                                .toCompletableFuture()
+                                .get();
             }
 
             if (totalProcessed >= expected) {
@@ -288,13 +305,14 @@ public class MatchingEngineJmhBenchmark {
         // 每次 JMH 调用都用独立临时目录，避免上一次持久化文件影响当前结果。
         try (var stream = Files.walk(path)) {
             stream.sorted(java.util.Comparator.reverseOrder())
-                    .forEach(p -> {
-                        try {
-                            Files.deleteIfExists(p);
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    });
+                    .forEach(
+                            p -> {
+                                try {
+                                    Files.deleteIfExists(p);
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            });
         } catch (RuntimeException e) {
             if (e.getCause() instanceof IOException io) {
                 throw io;
@@ -303,19 +321,21 @@ public class MatchingEngineJmhBenchmark {
         }
     }
 
-    private record OrderSeed(String orderId,
-                             String userId,
-                             String symbol,
-                             Side side,
-                             long price,
-                             long quantity,
-                             long createTime) {
+    private record OrderSeed(
+            String orderId,
+            String userId,
+            String symbol,
+            Side side,
+            long price,
+            long quantity,
+            long createTime) {
 
         private Order toOrder() {
             return new Order(orderId, userId, symbol, side, price, quantity, createTime, orderId);
         }
 
-        private static List<OrderSeed> generate(int totalOrders, int symbolCount, int priceLevels, boolean crossMatch) {
+        private static List<OrderSeed> generate(
+                int totalOrders, int symbolCount, int priceLevels, boolean crossMatch) {
             java.util.ArrayList<OrderSeed> orders = new java.util.ArrayList<>(totalOrders);
 
             for (int i = 0; i < totalOrders; i++) {
@@ -325,19 +345,20 @@ public class MatchingEngineJmhBenchmark {
                 long offset = i % priceLevels;
 
                 // cross=true 更偏向成交路径；false 更偏向挂单路径。
-                long price = crossMatch
-                        ? ((side == Side.BUY) ? base + offset : base + offset - 1)
-                        : ((side == Side.BUY) ? base - 100 - offset : base + 100 + offset);
+                long price =
+                        crossMatch
+                                ? ((side == Side.BUY) ? base + offset : base + offset - 1)
+                                : ((side == Side.BUY) ? base - 100 - offset : base + 100 + offset);
 
-                orders.add(new OrderSeed(
-                        "JMH-O" + i,
-                        "JMH-U" + (i % 10_000),
-                        symbol,
-                        side,
-                        price,
-                        1L,
-                        1_700_000_000_000L + i
-                ));
+                orders.add(
+                        new OrderSeed(
+                                "JMH-O" + i,
+                                "JMH-U" + (i % 10_000),
+                                symbol,
+                                side,
+                                price,
+                                1L,
+                                1_700_000_000_000L + i));
             }
 
             return orders;

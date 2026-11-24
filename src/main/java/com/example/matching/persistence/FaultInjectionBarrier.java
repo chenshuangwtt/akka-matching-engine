@@ -3,14 +3,15 @@ package com.example.matching.persistence;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 
 /** Deterministic crash-test barrier, active only in an explicitly configured child JVM. */
 public final class FaultInjectionBarrier {
     private static final String POINT = "matching.test.faultPoint";
     private static final String SIGNAL_DIR = "matching.test.signalDir";
-    private static final ConcurrentHashMap<String, CountDownLatch> releases = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, CountDownLatch> releases =
+            new ConcurrentHashMap<>();
 
     private FaultInjectionBarrier() {}
 
@@ -19,7 +20,9 @@ public final class FaultInjectionBarrier {
     }
 
     public static void stopAt(String point, long sequence) {
-        if (!enabled(point)) return;
+        if (!enabled(point)) {
+            return;
+        }
         try {
             Path signal = Path.of(System.getProperty(SIGNAL_DIR)).resolve(point + ".reached");
             Files.writeString(signal, Long.toString(sequence));
@@ -36,11 +39,15 @@ public final class FaultInjectionBarrier {
 
     public static void release(String point) {
         CountDownLatch latch = releases.remove(point);
-        if (latch != null) latch.countDown();
+        if (latch != null) {
+            latch.countDown();
+        }
     }
 
     public static void crashAt(String point, long sequence) {
-        if (!enabled(point)) return;
+        if (!enabled(point)) {
+            return;
+        }
         try {
             Path signal = Path.of(System.getProperty(SIGNAL_DIR)).resolve(point + ".reached");
             Files.writeString(signal, Long.toString(sequence));
@@ -51,9 +58,12 @@ public final class FaultInjectionBarrier {
     }
 
     public static void fatalAt(String point, long sequence) {
-        if (!enabled(point)) return;
+        if (!enabled(point)) {
+            return;
+        }
         try {
-            Files.writeString(Path.of(System.getProperty(SIGNAL_DIR)).resolve(point + ".reached"),
+            Files.writeString(
+                    Path.of(System.getProperty(SIGNAL_DIR)).resolve(point + ".reached"),
                     Long.toString(sequence));
         } catch (IOException ex) {
             throw new IllegalStateException("Fault injection marker failed at " + point, ex);

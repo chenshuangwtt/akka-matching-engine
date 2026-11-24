@@ -5,6 +5,7 @@ import akka.actor.typed.ActorSystem;
 import akka.actor.typed.Props;
 import akka.actor.typed.javadsl.AskPattern;
 import akka.actor.typed.javadsl.Behaviors;
+
 import com.example.matching.actor.SymbolActor;
 import com.example.matching.domain.Order;
 import com.example.matching.domain.Side;
@@ -38,16 +39,30 @@ public final class P3LoadProbe {
         int warmup = args.length > 1 ? Integer.parseInt(args[1]) : 100;
         int ordersPerSymbol = args.length > 2 ? Integer.parseInt(args[2]) : 2_500;
         int symbols = args.length > 3 ? Integer.parseInt(args[3]) : 4;
-        if (measured < 1 || measured > 5_000 || warmup < 0 || warmup > 500
-                || ordersPerSymbol < 1 || ordersPerSymbol > 100_000 || symbols < 1 || symbols > 8
+        if (measured < 1
+                || measured > 5_000
+                || warmup < 0
+                || warmup > 500
+                || ordersPerSymbol < 1
+                || ordersPerSymbol > 100_000
+                || symbols < 1
+                || symbols > 8
                 || (long) ordersPerSymbol * symbols > 100_000) {
-            throw new IllegalArgumentException("Probe bounds: measured 1-5000, warmup 0-500, orders/symbol 1-100000, symbols 1-8, total <=100000");
+            throw new IllegalArgumentException(
+                    "Probe bounds: measured 1-5000, warmup 0-500, orders/symbol 1-100000, symbols"
+                            + " 1-8, total <=100000");
         }
-        Path root = Path.of("target", "p3-probe-" + System.currentTimeMillis()).toAbsolutePath().normalize();
+        Path root =
+                Path.of("target", "p3-probe-" + System.currentTimeMillis())
+                        .toAbsolutePath()
+                        .normalize();
         Files.createDirectories(root);
-        System.out.printf("P3_ENV java=%s processors=%d maxHeap=%d output=%s%n",
-                System.getProperty("java.version"), Runtime.getRuntime().availableProcessors(),
-                Runtime.getRuntime().maxMemory(), root);
+        System.out.printf(
+                "P3_ENV java=%s processors=%d maxHeap=%d output=%s%n",
+                System.getProperty("java.version"),
+                Runtime.getRuntime().availableProcessors(),
+                Runtime.getRuntime().maxMemory(),
+                root);
         measureCore(warmup, measured);
         measureActorWithoutJournal(warmup, measured);
         measureJournal(root.resolve("journal"), warmup, measured);
@@ -59,37 +74,66 @@ public final class P3LoadProbe {
         long[] latencies = new long[measured];
         long measuredStarted = 0;
         for (int i = 0; i < warmup + measured; i++) {
-            Order order = new Order("core-order-" + i, "probe", "P3JOURNAL", Side.BUY,
-                    10_000, 1, i + 1L, "core-key-" + i);
-            if (i == warmup) measuredStarted = System.nanoTime();
+            Order order =
+                    new Order(
+                            "core-order-" + i,
+                            "probe",
+                            "P3JOURNAL",
+                            Side.BUY,
+                            10_000,
+                            1,
+                            i + 1L,
+                            "core-key-" + i);
+            if (i == warmup) {
+                measuredStarted = System.nanoTime();
+            }
             long started = System.nanoTime();
             MatchResult result = book.place(order);
-            if (result.getFinalOrder() == null) throw new IllegalStateException("Core order was not accepted");
-            if (i >= warmup) latencies[i - warmup] = System.nanoTime() - started;
+            if (result.getFinalOrder() == null) {
+                throw new IllegalStateException("Core order was not accepted");
+            }
+            if (i >= warmup) {
+                latencies[i - warmup] = System.nanoTime() - started;
+            }
         }
         double seconds = (System.nanoTime() - measuredStarted) / 1_000_000_000.0;
         Arrays.sort(latencies);
-        System.out.printf("P3_CORE warmup=%d measured=%d elapsedSeconds=%.3f tps=%.2f "
+        System.out.printf(
+                "P3_CORE warmup=%d measured=%d elapsedSeconds=%.3f tps=%.2f "
                         + "p50Ms=%.6f p95Ms=%.6f p99Ms=%.6f%n",
-                warmup, measured, seconds, measured / seconds,
-                percentile(latencies, 0.50), percentile(latencies, 0.95), percentile(latencies, 0.99));
+                warmup,
+                measured,
+                seconds,
+                measured / seconds,
+                percentile(latencies, 0.50),
+                percentile(latencies, 0.95),
+                percentile(latencies, 0.99));
     }
 
     private static void measureActorWithoutJournal(int warmup, int measured) throws Exception {
         ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "p3-actor-probe");
         try {
-            ActorRef<SymbolActor.Command> actor = system.systemActorOf(
-                    SymbolActor.create("P3JOURNAL", false, null), "symbol-p3-actor",
-                    Props.empty().withDispatcherFromConfig("akka.actor.matching-dispatcher"));
+            ActorRef<SymbolActor.Command> actor =
+                    system.systemActorOf(
+                            SymbolActor.create("P3JOURNAL", false, null),
+                            "symbol-p3-actor",
+                            Props.empty()
+                                    .withDispatcherFromConfig("akka.actor.matching-dispatcher"));
             sendBatch(system, actor, 0, warmup, 16);
             long started = System.nanoTime();
             long[] latencies = sendBatch(system, actor, warmup, measured, 16);
             double seconds = (System.nanoTime() - started) / 1_000_000_000.0;
             Arrays.sort(latencies);
-            System.out.printf("P3_ACTOR_ACK warmup=%d measured=%d inFlight=16 elapsedSeconds=%.3f "
+            System.out.printf(
+                    "P3_ACTOR_ACK warmup=%d measured=%d inFlight=16 elapsedSeconds=%.3f "
                             + "tps=%.2f p50Ms=%.3f p95Ms=%.3f p99Ms=%.3f%n",
-                    warmup, measured, seconds, measured / seconds,
-                    percentile(latencies, 0.50), percentile(latencies, 0.95), percentile(latencies, 0.99));
+                    warmup,
+                    measured,
+                    seconds,
+                    measured / seconds,
+                    percentile(latencies, 0.50),
+                    percentile(latencies, 0.95),
+                    percentile(latencies, 0.99));
         } finally {
             system.terminate();
             system.getWhenTerminated().toCompletableFuture().get(30, TimeUnit.SECONDS);
@@ -100,32 +144,48 @@ public final class P3LoadProbe {
         Files.createDirectories(dir);
         ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "p3-journal-probe");
         try {
-            ActorRef<SymbolActor.Command> actor = system.systemActorOf(
-                    SymbolActor.create("P3JOURNAL", true, dir, 1_000), "symbol-p3-journal",
-                    Props.empty().withDispatcherFromConfig("akka.actor.matching-dispatcher"));
+            ActorRef<SymbolActor.Command> actor =
+                    system.systemActorOf(
+                            SymbolActor.create("P3JOURNAL", true, dir, 1_000),
+                            "symbol-p3-journal",
+                            Props.empty()
+                                    .withDispatcherFromConfig("akka.actor.matching-dispatcher"));
             sendBatch(system, actor, 0, warmup, 16);
             long started = System.nanoTime();
             long[] latencies = sendBatch(system, actor, warmup, measured, 16);
             double seconds = (System.nanoTime() - started) / 1_000_000_000.0;
-            Path journal = dir.resolve(SymbolKeyUtil.toPersistenceStem("P3JOURNAL") + ".events.jsonl");
-            Path snapshot = dir.resolve(SymbolKeyUtil.toPersistenceStem("P3JOURNAL") + ".snapshot.json");
+            Path journal =
+                    dir.resolve(SymbolKeyUtil.toPersistenceStem("P3JOURNAL") + ".events.jsonl");
+            Path snapshot =
+                    dir.resolve(SymbolKeyUtil.toPersistenceStem("P3JOURNAL") + ".snapshot.json");
             long journalBytes = Files.size(journal);
             long recoveryStarted = System.nanoTime();
             var recovery = new OrderEventStore(dir, "P3JOURNAL").loadRecoveryState();
             double recoveryMillis = (System.nanoTime() - recoveryStarted) / 1_000_000.0;
-            long checkpoint = recovery.snapshot() == null ? 0 : recovery.snapshot().getLastAppliedSequence();
+            long checkpoint =
+                    recovery.snapshot() == null ? 0 : recovery.snapshot().getLastAppliedSequence();
             if (recovery.lastSequence() != warmup + measured
                     || checkpoint + recovery.events().size() != warmup + measured) {
-                throw new IllegalStateException("Journal recovery count differs from confirmed order count");
+                throw new IllegalStateException(
+                        "Journal recovery count differs from confirmed order count");
             }
             Arrays.sort(latencies);
-            System.out.printf("P3_JOURNAL warmup=%d measured=%d inFlight=16 elapsedSeconds=%.3f tps=%.2f "
-                            + "p50Ms=%.3f p95Ms=%.3f p99Ms=%.3f journalBytes=%d pendingEvents=%d "
-                            + "snapshotBytes=%d snapshotSequence=%d recoveryMs=%.3f lastSequence=%d%n",
-                    warmup, measured, seconds, measured / seconds,
-                    percentile(latencies, 0.50), percentile(latencies, 0.95), percentile(latencies, 0.99),
-                    journalBytes, recovery.events().size(),
-                    Files.exists(snapshot) ? Files.size(snapshot) : 0, checkpoint, recoveryMillis,
+            System.out.printf(
+                    "P3_JOURNAL warmup=%d measured=%d inFlight=16 elapsedSeconds=%.3f tps=%.2f"
+                        + " p50Ms=%.3f p95Ms=%.3f p99Ms=%.3f journalBytes=%d pendingEvents=%d"
+                        + " snapshotBytes=%d snapshotSequence=%d recoveryMs=%.3f lastSequence=%d%n",
+                    warmup,
+                    measured,
+                    seconds,
+                    measured / seconds,
+                    percentile(latencies, 0.50),
+                    percentile(latencies, 0.95),
+                    percentile(latencies, 0.99),
+                    journalBytes,
+                    recovery.events().size(),
+                    Files.exists(snapshot) ? Files.size(snapshot) : 0,
+                    checkpoint,
+                    recoveryMillis,
                     recovery.lastSequence());
         } finally {
             system.terminate();
@@ -133,29 +193,50 @@ public final class P3LoadProbe {
         }
     }
 
-    private static long[] sendBatch(ActorSystem<Void> system, ActorRef<SymbolActor.Command> actor,
-                                    int first, int count, int maxInFlight) throws Exception {
+    private static long[] sendBatch(
+            ActorSystem<Void> system,
+            ActorRef<SymbolActor.Command> actor,
+            int first,
+            int count,
+            int maxInFlight)
+            throws Exception {
         ArrayDeque<CompletableFuture<Sample>> pending = new ArrayDeque<>();
         long[] latencies = new long[count];
         int completed = 0;
         for (int index = first; index < first + count; index++) {
-            Order order = new Order("p3-order-" + index, "probe", "P3JOURNAL", Side.BUY,
-                    10_000, 1, index + 1L, "p3-key-" + index);
+            Order order =
+                    new Order(
+                            "p3-order-" + index,
+                            "probe",
+                            "P3JOURNAL",
+                            Side.BUY,
+                            10_000,
+                            1,
+                            index + 1L,
+                            "p3-key-" + index);
             long sent = System.nanoTime();
-            CompletableFuture<Sample> future = AskPattern.<SymbolActor.Command, MatchResult>ask(
-                    actor, replyTo -> new SymbolActor.PlaceOrder(order, replyTo),
-                    Duration.ofSeconds(30), system.scheduler())
-                    .thenApply(result -> new Sample(result, System.nanoTime() - sent)).toCompletableFuture();
+            CompletableFuture<Sample> future =
+                    AskPattern.<SymbolActor.Command, MatchResult>ask(
+                                    actor,
+                                    replyTo -> new SymbolActor.PlaceOrder(order, replyTo),
+                                    Duration.ofSeconds(30),
+                                    system.scheduler())
+                            .thenApply(result -> new Sample(result, System.nanoTime() - sent))
+                            .toCompletableFuture();
             pending.addLast(future);
             if (pending.size() >= maxInFlight) {
                 Sample sample = pending.removeFirst().get(30, TimeUnit.SECONDS);
-                if (sample.result().getFinalOrder() == null) throw new IllegalStateException(sample.result().getMessage());
+                if (sample.result().getFinalOrder() == null) {
+                    throw new IllegalStateException(sample.result().getMessage());
+                }
                 latencies[completed++] = sample.latencyNanos();
             }
         }
         while (!pending.isEmpty()) {
             Sample sample = pending.removeFirst().get(30, TimeUnit.SECONDS);
-            if (sample.result().getFinalOrder() == null) throw new IllegalStateException(sample.result().getMessage());
+            if (sample.result().getFinalOrder() == null) {
+                throw new IllegalStateException(sample.result().getMessage());
+            }
             latencies[completed++] = sample.latencyNanos();
         }
         return latencies;
@@ -178,17 +259,37 @@ public final class P3LoadProbe {
             OrderBook book = new OrderBook();
             for (int i = 0; i < perSymbol; i++) {
                 String id = "00000000-0000-0000-0000-" + String.format("%012d", i);
-                book.placeForBenchmark(new Order(id, "probe", symbol, Side.BUY,
-                        10_000, 1, i + 1L, "cli-" + symbolIndex + "-" + i));
+                book.placeForBenchmark(
+                        new Order(
+                                id,
+                                "probe",
+                                symbol,
+                                Side.BUY,
+                                10_000,
+                                1,
+                                i + 1L,
+                                "cli-" + symbolIndex + "-" + i));
             }
             if (perSymbol == OrderBook.DEFAULT_MAX_HISTORICAL_ORDERS) {
-                if (!book.isAtCapacity()) throw new IllegalStateException("Capacity boundary not reached");
+                if (!book.isAtCapacity()) {
+                    throw new IllegalStateException("Capacity boundary not reached");
+                }
                 try {
-                    book.placeForBenchmark(new Order("over-capacity", "probe", symbol,
-                            Side.BUY, 10_000, 1, perSymbol + 1L, "over-capacity"));
+                    book.placeForBenchmark(
+                            new Order(
+                                    "over-capacity",
+                                    "probe",
+                                    symbol,
+                                    Side.BUY,
+                                    10_000,
+                                    1,
+                                    perSymbol + 1L,
+                                    "over-capacity"));
                     throw new IllegalStateException("Capacity did not reject the next order");
                 } catch (IllegalStateException expected) {
-                    if (!expected.getMessage().contains("capacity exceeded")) throw expected;
+                    if (!expected.getMessage().contains("capacity exceeded")) {
+                        throw expected;
+                    }
                 }
             }
             books.add(book);
@@ -207,11 +308,18 @@ public final class P3LoadProbe {
         if (books.stream().mapToInt(OrderBook::historicalOrderCount).sum() != total) {
             throw new IllegalStateException("Historical count mismatch");
         }
-        System.out.printf("P3_CAPACITY symbols=%d ordersPerSymbol=%d totalOrders=%d heapBefore=%d "
-                        + "heapAfter=%d heapDelta=%d syntheticSnapshotBytes=%d snapshotBytesPerOrder=%.1f "
-                        + "atDefaultLimit=%s%n",
-                symbols, perSymbol, total, before, after, after - before,
-                snapshotBytes, (double) snapshotBytes / total,
+        System.out.printf(
+                "P3_CAPACITY symbols=%d ordersPerSymbol=%d totalOrders=%d heapBefore=%d"
+                        + " heapAfter=%d heapDelta=%d syntheticSnapshotBytes=%d"
+                        + " snapshotBytesPerOrder=%.1f atDefaultLimit=%s%n",
+                symbols,
+                perSymbol,
+                total,
+                before,
+                after,
+                after - before,
+                snapshotBytes,
+                (double) snapshotBytes / total,
                 perSymbol == OrderBook.DEFAULT_MAX_HISTORICAL_ORDERS);
     }
 

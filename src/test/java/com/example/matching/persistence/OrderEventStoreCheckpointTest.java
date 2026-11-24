@@ -1,33 +1,44 @@
 package com.example.matching.persistence;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.example.matching.domain.Order;
 import com.example.matching.domain.Side;
-import com.example.matching.engine.OrderBook;
 import com.example.matching.engine.MatchResult;
+import com.example.matching.engine.OrderBook;
 import com.example.matching.util.SymbolKeyUtil;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.UncheckedIOException;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
-import java.io.UncheckedIOException;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class OrderEventStoreCheckpointTest {
     @TempDir Path dir;
 
-    private Path journal() { return dir.resolve(SymbolKeyUtil.toPersistenceStem("BTCUSDT") + ".events.jsonl"); }
-    private Path snapshot() { return dir.resolve(SymbolKeyUtil.toPersistenceStem("BTCUSDT") + ".snapshot.json"); }
-    private OrderEventStore store() { return new OrderEventStore(dir, "BTCUSDT", 2); }
+    private Path journal() {
+        return dir.resolve(SymbolKeyUtil.toPersistenceStem("BTCUSDT") + ".events.jsonl");
+    }
+
+    private Path snapshot() {
+        return dir.resolve(SymbolKeyUtil.toPersistenceStem("BTCUSDT") + ".snapshot.json");
+    }
+
+    private OrderEventStore store() {
+        return new OrderEventStore(dir, "BTCUSDT", 2);
+    }
+
     private Order order(String id, Side side, long quantity) {
         return new Order(id, "U", "BTCUSDT", side, 10000, quantity, 1, id);
     }
 
-    @Test void tradeIdsRemainDistinctAfterRepeatedCheckpointRecovery() {
+    @Test
+    void tradeIdsRemainDistinctAfterRepeatedCheckpointRecovery() {
         OrderEventStore initial = store();
         OrderBook firstBook = new OrderBook();
         Order buy = order("B", Side.BUY, 3);
@@ -41,18 +52,31 @@ class OrderEventStoreCheckpointTest {
         var secondRecovery = secondStore.loadRecoveryState();
         assertEquals(2, secondRecovery.snapshot().getLastAppliedSequence());
         OrderBook secondBook = new OrderBook();
-        secondBook.restoreSnapshot(secondRecovery.snapshot().getOpenOrders(), secondRecovery.snapshot().getAllOrders());
+        secondBook.restoreSnapshot(
+                secondRecovery.snapshot().getOpenOrders(),
+                secondRecovery.snapshot().getAllOrders());
         Order sell2 = order("S2", Side.SELL, 1);
-        String id2 = secondBook.place(sell2, secondStore.appendPlace(sell2)).getTrades().get(0).getTradeId();
+        String id2 =
+                secondBook
+                        .place(sell2, secondStore.appendPlace(sell2))
+                        .getTrades()
+                        .get(0)
+                        .getTradeId();
         checkpoint(secondStore, secondBook, 3);
 
         OrderEventStore thirdStore = store();
         var thirdRecovery = thirdStore.loadRecoveryState();
         assertEquals(3, thirdRecovery.snapshot().getLastAppliedSequence());
         OrderBook thirdBook = new OrderBook();
-        thirdBook.restoreSnapshot(thirdRecovery.snapshot().getOpenOrders(), thirdRecovery.snapshot().getAllOrders());
+        thirdBook.restoreSnapshot(
+                thirdRecovery.snapshot().getOpenOrders(), thirdRecovery.snapshot().getAllOrders());
         Order sell3 = order("S3", Side.SELL, 1);
-        String id3 = thirdBook.place(sell3, thirdStore.appendPlace(sell3)).getTrades().get(0).getTradeId();
+        String id3 =
+                thirdBook
+                        .place(sell3, thirdStore.appendPlace(sell3))
+                        .getTrades()
+                        .get(0)
+                        .getTradeId();
         assertEquals("T:QlRDVVNEVA:2:1", id1);
         assertEquals("T:QlRDVVNEVA:3:1", id2);
         assertEquals("T:QlRDVVNEVA:4:1", id3);
@@ -89,17 +113,22 @@ class OrderEventStoreCheckpointTest {
         checkpoint.setOpenOrders(book.exportOpenOrders());
         checkpoint.setAllOrders(book.exportAllOrders());
         store.compact(checkpoint);
-        Files.writeString(journal(), fullJournal, StandardCharsets.UTF_8); // crash after snapshot replacement
-        Files.writeString(journal().resolveSibling(journal().getFileName() + ".tmp"), "{incomplete");
+        Files.writeString(
+                journal(), fullJournal, StandardCharsets.UTF_8); // crash after snapshot replacement
+        Files.writeString(
+                journal().resolveSibling(journal().getFileName() + ".tmp"), "{incomplete");
 
         for (int i = 0; i < 3; i++) {
             OrderEventStore.RecoveryState recovered = store().loadRecoveryState();
             assertEquals(2, recovered.lastSequence());
             assertTrue(recovered.events().isEmpty());
             OrderBook rebuilt = new OrderBook();
-            rebuilt.restoreSnapshot(recovered.snapshot().getOpenOrders(), recovered.snapshot().getAllOrders());
+            rebuilt.restoreSnapshot(
+                    recovered.snapshot().getOpenOrders(), recovered.snapshot().getAllOrders());
             assertEquals(1, rebuilt.openOrderCount());
-            assertTrue(rebuilt.snapshot().stream().anyMatch(line -> line.contains("id=B") && line.contains("remain=2")));
+            assertTrue(
+                    rebuilt.snapshot().stream()
+                            .anyMatch(line -> line.contains("id=B") && line.contains("remain=2")));
             assertFalse(rebuilt.snapshot().stream().anyMatch(line -> line.contains("id=S")));
         }
     }
@@ -125,15 +154,20 @@ class OrderEventStoreCheckpointTest {
         assertThrows(IllegalStateException.class, () -> store().loadRecoveryState());
         Files.writeString(journal(), first + first, StandardCharsets.UTF_8);
         assertThrows(IllegalStateException.class, () -> store().loadRecoveryState());
-        Files.writeString(journal(), first + first.replace("\"sequence\":1", "\"sequence\":3"), StandardCharsets.UTF_8);
+        Files.writeString(
+                journal(),
+                first + first.replace("\"sequence\":1", "\"sequence\":3"),
+                StandardCharsets.UTF_8);
         assertThrows(IllegalStateException.class, () -> store().loadRecoveryState());
     }
 
     @Test
     void shouldRejectIncompatibleJournalWithoutChangingIt() throws Exception {
-        String oldRecord = "{\"type\":\"PLACE\",\"sequence\":1,\"symbol\":\"BTCUSDT\",\"orderId\":\"OLD\"}\n";
+        String oldRecord =
+                "{\"type\":\"PLACE\",\"sequence\":1,\"symbol\":\"BTCUSDT\",\"orderId\":\"OLD\"}\n";
         Files.writeString(journal(), oldRecord);
-        IllegalStateException error = assertThrows(IllegalStateException.class, () -> store().loadRecoveryState());
+        IllegalStateException error =
+                assertThrows(IllegalStateException.class, () -> store().loadRecoveryState());
         assertTrue(error.getMessage().contains("Incompatible journal format version"));
         assertEquals(oldRecord, Files.readString(journal()));
     }
@@ -142,9 +176,11 @@ class OrderEventStoreCheckpointTest {
     void shouldRejectIncompatibleSnapshotWithoutChangingIt() throws Exception {
         OrderEventStore store = store();
         store.appendPlace(order("CURRENT", Side.BUY, 2));
-        String oldSnapshot = "{\"schemaVersion\":2,\"lastAppliedSequence\":1,\"openOrders\":[],\"allOrders\":[]}";
+        String oldSnapshot =
+                "{\"schemaVersion\":2,\"lastAppliedSequence\":1,\"openOrders\":[],\"allOrders\":[]}";
         Files.writeString(snapshot(), oldSnapshot);
-        IllegalStateException error = assertThrows(IllegalStateException.class, () -> store().loadRecoveryState());
+        IllegalStateException error =
+                assertThrows(IllegalStateException.class, () -> store().loadRecoveryState());
         assertTrue(error.getMessage().contains("Incompatible snapshot format version"));
         assertEquals(oldSnapshot, Files.readString(snapshot()));
         assertTrue(Files.readString(journal()).contains("CURRENT"));
@@ -173,13 +209,21 @@ class OrderEventStoreCheckpointTest {
         assertEquals(dir, snapshot().resolveSibling(snapshot().getFileName() + ".tmp").getParent());
         assertEquals(dir, journal().resolveSibling(journal().getFileName() + ".tmp").getParent());
         assertEquals(Files.getFileStore(dir), Files.getFileStore(journal()));
-        if (Files.exists(snapshot())) assertEquals(Files.getFileStore(dir), Files.getFileStore(snapshot()));
+        if (Files.exists(snapshot())) {
+            assertEquals(Files.getFileStore(dir), Files.getFileStore(snapshot()));
+        }
         OrderEventStore.RecoveryState recovered = store().loadRecoveryState();
         assertEquals(1, recovered.lastSequence());
         OrderBook rebuilt = new OrderBook();
-        if (recovered.snapshot() != null) rebuilt.restoreSnapshot(recovered.snapshot().getOpenOrders(), recovered.snapshot().getAllOrders());
+        if (recovered.snapshot() != null) {
+            rebuilt.restoreSnapshot(
+                    recovered.snapshot().getOpenOrders(), recovered.snapshot().getAllOrders());
+        }
         recovered.events().forEach(event -> rebuilt.place(event.toOrder(), event.getSequence()));
-        assertTrue(rebuilt.snapshot().stream().anyMatch(line -> line.contains("id=B") && line.contains("remain=5")));
-        System.out.println("WINDOWS_OPEN_HANDLE_REPLACE succeeded=" + replaced + " recoveredSequence=1");
+        assertTrue(
+                rebuilt.snapshot().stream()
+                        .anyMatch(line -> line.contains("id=B") && line.contains("remain=5")));
+        System.out.println(
+                "WINDOWS_OPEN_HANDLE_REPLACE succeeded=" + replaced + " recoveredSequence=1");
     }
 }
