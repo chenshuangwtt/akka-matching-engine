@@ -117,7 +117,7 @@ Journal 是每交易对一个带单调序号的 JSON Lines 文件，记录 `PLAC
 ## 功能边界与许可
 
 - 单机单进程内按交易对串行撮合；未实现多实例所有权、身份认证、余额冻结或清结算。
-- Journal 和 Snapshot 只接受 `formatVersion=3`；旧实验格式会明确拒绝恢复，不迁移、不清空。开发数据重置脚本 [`scripts/reset-test-data.ps1`](scripts/reset-test-data.ps1) 只允许显式指定项目 `target/` 下的测试目录，不能用于默认 `data/events`。
+- Journal 和 Snapshot 只接受 `formatVersion=3`；V1/V2 等旧实验格式不能直接恢复，会明确拒绝，不自动迁移或清空。开发数据重置脚本 [`scripts/reset-test-data.ps1`](scripts/reset-test-data.ps1) 只允许显式指定项目 `target/` 下的测试目录，不能用于默认 `data/events`。
 - Snapshot 不保存完整成交历史；成交 ID 由交易对、已持久化的 `PLACE` 事件序号和事件内成交序号确定，重启后不会复用，但不能据此做历史成交查询或资金对账。
 - 历史幂等索引随已接受订单线性增长。默认每交易对上限 100000 单，满后返回不可用并保留旧记录；没有安全回收或归档。Windows 目录元数据刷盘与物理断电持久性未获得验证。
 - 不宣称严格的端到端 Exactly Once，也不宣称具备生产级交易或清结算能力。

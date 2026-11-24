@@ -57,7 +57,7 @@ Windows Java NIO 可 `force` 文件内容，但没有可移植的目录元数据
 
 ### 不兼容实验数据
 
-旧 Journal 或 Snapshot 缺少 `formatVersion=3` 时，恢复明确报不兼容并拒绝撮合。程序不迁移、不删除或清空文件。开发者如要重置实验数据，须显式指定 `target/` 下的独立测试目录并运行 `scripts/reset-test-data.ps1 -TestDirectory <path>`；默认 `data/events` 不在允许范围。
+V1/V2 等旧 Journal 或 Snapshot 缺少 `formatVersion=3` 时，不能直接恢复；系统明确报不兼容并拒绝撮合。程序不自动迁移、不删除或清空文件。开发者如要重置实验数据，须显式指定 `target/` 下的独立测试目录并运行 `scripts/reset-test-data.ps1 -TestDirectory <path>`；默认 `data/events` 不在允许范围。
 
 ## 故障处理与边界
 
